@@ -1,0 +1,201 @@
+@baseUrl = http://localhost:5034
+
+# Run requests in order, from top to bottom.
+# Named response variables require the referenced request to be sent first.
+# Creating a new room invalidates IDs/tokens from the previous test run.
+# Do not commit real room codes or participant tokens to Git.
+
+### 1. Create room
+# @name createRoom
+POST {{baseUrl}}/api/rooms
+
+### 2. Join room as first participant
+# @name joinLeonid
+POST {{baseUrl}}/api/rooms/join
+Content-Type: application/json
+
+{
+  "code": "{{createRoom.response.body.$.code}}",
+  "name": "Leonid",
+  "role": "Backend Developer"
+}
+
+### 3. Get room state (participant token is required)
+GET {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}
+X-Participant-Token: {{joinLeonid.response.body.$.participantToken}}
+
+### 4. Get current participant profile
+GET {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/participants/me
+X-Participant-Token: {{joinLeonid.response.body.$.participantToken}}
+
+### 5. Join room as second participant
+# @name joinAnna
+POST {{baseUrl}}/api/rooms/join
+Content-Type: application/json
+
+{
+  "code": "{{createRoom.response.body.$.code}}",
+  "name": "Anna",
+  "role": "QA Engineer"
+}
+
+### 6. Create estimation A (automatically becomes active)
+# @name createEstimationA
+POST {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations
+Content-Type: application/json
+
+{
+  "title": "Implement Google OAuth",
+  "description": "Add Google sign-in and logout functionality"
+}
+
+### 7. Get all estimations in room
+GET {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations
+
+### 8. Get estimation A and votes (initially empty)
+GET {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}
+X-Participant-Token: {{joinLeonid.response.body.$.participantToken}}
+
+### 9. Leonid votes 5
+PUT {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}/votes/me
+X-Participant-Token: {{joinLeonid.response.body.$.participantToken}}
+Content-Type: application/json
+
+{
+  "value": 5
+}
+
+### 10. Anna votes 0.5 (float)
+PUT {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}/votes/me
+X-Participant-Token: {{joinAnna.response.body.$.participantToken}}
+Content-Type: application/json
+
+{
+  "value": 0.5
+}
+
+### 11. Hidden votes, from Leonid's perspective (Anna's value should be null)
+GET {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}
+X-Participant-Token: {{joinLeonid.response.body.$.participantToken}}
+
+### 12. Reveal votes (idempotent)
+PUT {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}/visibility
+Content-Type: application/json
+
+{
+  "isRevealed": true
+}
+
+### 13. Reveal again (should also return 200 OK)
+PUT {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}/visibility
+Content-Type: application/json
+
+{
+  "isRevealed": true
+}
+
+### 14. Get revealed votes (both values should be visible)
+GET {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}
+X-Participant-Token: {{joinLeonid.response.body.$.participantToken}}
+
+### 15. Update Leonid's vote from 5 to 8 (allowed after reveal)
+PUT {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}/votes/me
+X-Participant-Token: {{joinLeonid.response.body.$.participantToken}}
+Content-Type: application/json
+
+{
+  "value": 8
+}
+
+### 16. Hide votes again (votes are not deleted)
+PUT {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}/visibility
+Content-Type: application/json
+
+{
+  "isRevealed": false
+}
+
+### 17. Edit estimation A even after voting
+PUT {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "title": "Implement authentication",
+  "description": "Add Google OAuth and token refresh"
+}
+
+### 18. Set final result
+PUT {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}/result
+Content-Type: application/json
+
+{
+  "finalValue": 8
+}
+
+### 19. Create estimation B (estimation A remains saved)
+# @name createEstimationB
+POST {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations
+Content-Type: application/json
+
+{
+  "title": "Add integration tests",
+  "description": "Cover room and voting scenarios"
+}
+
+### 20. Get all estimations (A and B)
+GET {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations
+
+### 21. Activate estimation A again (idempotent)
+PUT {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}/activate
+
+### 22. Check room state: estimation A should be current
+GET {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}
+X-Participant-Token: {{joinLeonid.response.body.$.participantToken}}
+
+### 23. Clear votes in estimation A (also clears result and hides votes)
+DELETE {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}/votes
+
+### 24. Clear votes again (should still return 200 OK)
+DELETE {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}/votes
+
+### 25. Check estimation A after clear (votes empty, finalValue null)
+GET {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}
+X-Participant-Token: {{joinLeonid.response.body.$.participantToken}}
+
+### 26. Rejoin with same room code, name and role (same participantId, NEW token)
+# @name rejoinLeonid
+POST {{baseUrl}}/api/rooms/join
+Content-Type: application/json
+
+{
+  "code": "{{createRoom.response.body.$.code}}",
+  "name": "Leonid",
+  "role": "Backend Developer"
+}
+
+### 27. Verify profile with NEW token (old Leonid token no longer works)
+GET {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/participants/me
+X-Participant-Token: {{rejoinLeonid.response.body.$.participantToken}}
+
+### 28. Remove Anna by room code
+DELETE {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/participants/{{joinAnna.response.body.$.participantId}}
+X-Room-Code: {{createRoom.response.body.$.code}}
+
+### 29. Leonid leaves the room with NEW token
+DELETE {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/participants/me
+X-Participant-Token: {{rejoinLeonid.response.body.$.participantToken}}
+
+### Optional: reset final result (to null)
+PUT {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}/estimations/{{createEstimationA.response.body.$.id}}/result
+Content-Type: application/json
+
+{
+  "finalValue": null
+}
+
+### Optional: unauthorized room state request (expect 401)
+GET {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}
+
+### 30. Delete room by room code (destructive, do this last)
+DELETE {{baseUrl}}/api/rooms/{{createRoom.response.body.$.roomId}}
+X-Room-Code: {{createRoom.response.body.$.code}}

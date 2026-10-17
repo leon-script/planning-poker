@@ -1,0 +1,129 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Planning Poker SignalR Test</title>
+</head>
+<body>
+    <h2>Planning Poker - SignalR Test</h2>
+
+    <p>
+        Room ID:
+        <input id="roomId" size="40">
+    </p>
+
+    <p>
+        Participant Token:
+        <input id="token" size="70">
+    </p>
+
+    <button id="connect">Connect</button>
+    <button id="refresh">Refresh State</button>
+
+    <h3>Room State</h3>
+    <pre id="state"></pre>
+
+    <h3>Events</h3>
+    <pre id="events"></pre>
+
+    <script src="https://unpkg.com/@microsoft/signalr@10.0.0/dist/browser/signalr.min.js"></script>
+
+    <script>
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/hubs/rooms")
+            .withAutomaticReconnect()
+            .build();
+
+        let roomId;
+
+        function log(message) {
+            const output = document.getElementById("events");
+            output.textContent +=
+                new Date().toLocaleTimeString() + " " + message + "\n";
+        }
+
+        async function refreshState() {
+            if (!roomId) return;
+
+            const token = document.getElementById("token").value.trim();
+
+            const response = await fetch(`/api/rooms/${roomId}`, {
+                headers: {
+                    "X-Participant-Token": token
+                }
+            });
+
+            if (!response.ok) {
+                log(`GET room failed: HTTP ${response.status}`);
+                return;
+            }
+
+            const state = await response.json();
+
+            document.getElementById("state").textContent =
+                JSON.stringify(state, null, 2);
+        }
+
+        connection.on("RoomUpdated", async (updatedRoomId) => {
+            log(`RoomUpdated: ${updatedRoomId}`);
+
+            try {
+                await refreshState();
+            } catch (error) {
+                log(`Refresh failed: ${error}`);
+            }
+        });
+
+        connection.on("RoomDeleted", (deletedRoomId) => {
+            log(`RoomDeleted: ${deletedRoomId}`);
+            document.getElementById("state").textContent = "";
+        });
+
+        connection.onreconnecting(() => {
+            log("Reconnecting...");
+        });
+
+        connection.onreconnected(async () => {
+            log("Reconnected");
+
+            try {
+                await connection.invoke("JoinRoom", roomId);
+                await refreshState();
+            } catch (error) {
+                log(`Rejoin failed: ${error}`);
+            }
+        });
+
+        document.getElementById("connect").onclick = async () => {
+            try {
+                roomId = document.getElementById("roomId").value.trim();
+
+                if (!roomId) {
+                    log("Room ID is required");
+                    return;
+                }
+
+                if (connection.state === signalR.HubConnectionState.Disconnected) {
+                    await connection.start();
+                }
+
+                await connection.invoke("JoinRoom", roomId);
+
+                log(`Connected to room: ${roomId}`);
+                await refreshState();
+            } catch (error) {
+                log(`Connection failed: ${error}`);
+            }
+        };
+
+        document.getElementById("refresh").onclick = async () => {
+            try {
+                await refreshState();
+            } catch (error) {
+                log(`Refresh failed: ${error}`);
+            }
+        };
+    </script>
+</body>
+</html>

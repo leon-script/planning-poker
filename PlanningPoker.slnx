@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="PlanningPoker.Api/PlanningPoker.Api.csproj" Id="26746177-6106-4f2d-b375-8bfbbb9af9a7" />
+  <Project Path="PlanningPoker.Application/PlanningPoker.Application.csproj" Id="a6a388d8-7d0b-4f93-8692-ea56a269859d" />
+  <Project Path="PlanningPoker.Core/PlanningPoker.Core.csproj" Id="01ec32a2-2fc7-4dc9-a317-c69e691ec2a7" />
+  <Project Path="PlanningPoker.Infrastructure/PlanningPoker.Infrastructure.csproj" Id="bf276ad9-f609-45a6-819d-55e27f87a12e" />
+</Solution>
