@@ -1,75 +1,96 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using AutoMapper;
+using Microsoft.EntityFrameworkCore;
 using PlanningPoker.Core.Entities;
-using PlanningPoker.Core.Interfaces;
+using PlanningPoker.Infrastructure.Interfaces;
 using PlanningPoker.Infrastructure.Persistence;
+using PlanningPoker.Infrastructure.Persistence.Daos;
 
 namespace PlanningPoker.Infrastructure.Stores
 {
     public sealed class ParticipantStore : IParticipantStore
     {
-        private readonly PlanningPokerDbContext _db;
+        private readonly PlanningPokerDbContext _database;
+        private readonly IMapper _mapper;
 
-        public ParticipantStore(PlanningPokerDbContext db)
+        public ParticipantStore(
+            PlanningPokerDbContext database,
+            IMapper mapper)
         {
-            _db = db;
+            _database = database;
+            _mapper = mapper;
         }
 
         public async Task CreateAsync(
             Participant participant,
             CancellationToken cancellationToken = default)
         {
-            await _db.Participants.AddAsync(
-                participant,
-                cancellationToken);
+            var dao = _mapper.Map<ParticipantDao>(participant);
 
-            await _db.SaveChangesAsync(cancellationToken);
+            await _database.Participants.AddAsync(dao, cancellationToken);
+            await _database.SaveChangesAsync(cancellationToken);
         }
 
-        public Task<Participant?> GetAsync(
+        public async Task<Participant?> GetAsync(
             Guid roomId,
             Guid participantId,
             CancellationToken cancellationToken = default)
         {
-            return _db.Participants.FirstOrDefaultAsync(
-                x => x.Id == participantId &&
-                     x.RoomId == roomId,
-                cancellationToken);
+            var dao = await _database.Participants
+                .FirstOrDefaultAsync(
+                    x => x.Id == participantId &&
+                         x.RoomId == roomId,
+                    cancellationToken);
+
+            return _mapper.Map<Participant?>(dao);
         }
 
-        public Task<Participant?> GetByNameAndRoleAsync(
+        public async Task<Participant?> GetByNameAndRoleAsync(
             Guid roomId,
             string name,
             string role,
             CancellationToken cancellationToken = default)
         {
-            return _db.Participants.FirstOrDefaultAsync(
-                x => x.RoomId == roomId &&
-                     x.Name == name &&
-                     x.Role == role,
-                cancellationToken);
+            var dao = await _database.Participants
+                .FirstOrDefaultAsync(
+                    x => x.RoomId == roomId &&
+                         x.Name == name &&
+                         x.Role == role,
+                    cancellationToken);
+
+            return _mapper.Map<Participant?>(dao);
         }
 
-        public Task<Participant?> GetByTokenHashAsync(
+        public async Task<Participant?> GetByTokenHashAsync(
             Guid roomId,
             string tokenHash,
             CancellationToken cancellationToken = default)
         {
-            return _db.Participants.FirstOrDefaultAsync(
-                x => x.RoomId == roomId &&
-                     x.TokenHash == tokenHash,
-                cancellationToken);
+            var dao = await _database.Participants
+                .FirstOrDefaultAsync(
+                    x => x.RoomId == roomId &&
+                         x.TokenHash == tokenHash,
+                    cancellationToken);
+
+            return _mapper.Map<Participant?>(dao);
         }
 
         public async Task UpdateAsync(
             Participant participant,
             CancellationToken cancellationToken = default)
         {
-            if (_db.Entry(participant).State == EntityState.Detached)
+            var dao = await _database.Participants.FindAsync(
+                new object[] { participant.Id },
+                cancellationToken)
+                ?? throw new KeyNotFoundException("Participant not found.");
+
+            if (dao.RoomId != participant.RoomId)
             {
-                _db.Participants.Update(participant);
+                throw new KeyNotFoundException("Participant not found.");
             }
 
-            await _db.SaveChangesAsync(cancellationToken);
+            _database.Entry(dao).CurrentValues.SetValues(participant);
+
+            await _database.SaveChangesAsync(cancellationToken);
         }
 
         public async Task DeleteAsync(
@@ -77,27 +98,24 @@ namespace PlanningPoker.Infrastructure.Stores
             Guid participantId,
             CancellationToken cancellationToken = default)
         {
-            var exists = await _db.Participants.AnyAsync(
-                x => x.Id == participantId &&
-                     x.RoomId == roomId,
+            var dao = await _database.Participants.FindAsync(
+                new object[] { participantId },
                 cancellationToken);
 
-            if (!exists)
+            if (dao is null || dao.RoomId != roomId)
+            {
                 return;
+            }
 
-            await using var transaction =
-                await _db.Database.BeginTransactionAsync(
-                    cancellationToken);
+            await using var transaction = await _database.Database.BeginTransactionAsync(cancellationToken);
 
-            await _db.Votes
+            await _database.Votes
                 .Where(x => x.ParticipantId == participantId)
                 .ExecuteDeleteAsync(cancellationToken);
 
-            await _db.Participants
-                .Where(x => x.Id == participantId &&
-                            x.RoomId == roomId)
-                .ExecuteDeleteAsync(cancellationToken);
+            _database.Participants.Remove(dao);
 
+            await _database.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
     }

@@ -2,6 +2,7 @@
 using PlanningPoker.Application.Security;
 using PlanningPoker.Core.Entities;
 using PlanningPoker.Core.Interfaces;
+using PlanningPoker.Infrastructure.Interfaces;
 
 namespace PlanningPoker.Application.Services
 {
@@ -44,8 +45,7 @@ namespace PlanningPoker.Application.Services
 
             var tokenHash = SessionTokenHasher.Hash(participantToken);
 
-            var participant = await _voteStore.GetParticipantByTokenHashAsync(
-                roomId, tokenHash, cancellationToken);
+            var participant = await _voteStore.GetParticipantByTokenHashAsync(roomId, tokenHash, cancellationToken);
 
             if (participant is null)
             {

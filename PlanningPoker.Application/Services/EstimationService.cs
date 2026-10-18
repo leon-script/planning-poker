@@ -1,8 +1,9 @@
 using PlanningPoker.Application.Interfaces;
 using PlanningPoker.Application.Security;
-using PlanningPoker.Core.Contracts;
 using PlanningPoker.Core.Entities;
 using PlanningPoker.Core.Interfaces;
+using PlanningPoker.Core.States;
+using PlanningPoker.Infrastructure.Interfaces;
 
 namespace PlanningPoker.Application.Services
 {

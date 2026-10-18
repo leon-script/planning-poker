@@ -1,6 +1,6 @@
 ﻿using PlanningPoker.Core.Entities;
 
-namespace PlanningPoker.Core.Interfaces
+namespace PlanningPoker.Infrastructure.Interfaces
 {
     public interface IEstimationStore
     {

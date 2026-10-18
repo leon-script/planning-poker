@@ -1,7 +1,7 @@
-﻿using PlanningPoker.Core.Contracts;
-using PlanningPoker.Core.Entities;
+﻿using PlanningPoker.Core.Entities;
+using PlanningPoker.Core.Snapshots;
 
-namespace PlanningPoker.Core.Interfaces
+namespace PlanningPoker.Infrastructure.Interfaces
 {
     public interface IRoomStore
     {

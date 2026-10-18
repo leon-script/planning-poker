@@ -1,4 +1,4 @@
-﻿namespace PlanningPoker.Core.Contracts
+﻿namespace PlanningPoker.Core.States
 {
     public sealed record VoteState(
         Guid ParticipantId,

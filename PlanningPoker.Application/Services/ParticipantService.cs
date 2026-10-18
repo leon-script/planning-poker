@@ -3,6 +3,7 @@ using PlanningPoker.Application.Security;
 using PlanningPoker.Core.Contracts;
 using PlanningPoker.Core.Entities;
 using PlanningPoker.Core.Interfaces;
+using PlanningPoker.Infrastructure.Interfaces;
 using System.Security.Cryptography;
 
 namespace PlanningPoker.Application.Services

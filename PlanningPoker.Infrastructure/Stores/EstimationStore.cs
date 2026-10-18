@@ -1,50 +1,63 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using AutoMapper;
+using Microsoft.EntityFrameworkCore;
 using PlanningPoker.Core.Entities;
-using PlanningPoker.Core.Interfaces;
+using PlanningPoker.Infrastructure.Interfaces;
 using PlanningPoker.Infrastructure.Persistence;
+using PlanningPoker.Infrastructure.Persistence.Daos;
 
 namespace PlanningPoker.Infrastructure.Stores
 {
     public sealed class EstimationStore : IEstimationStore
     {
-        private readonly PlanningPokerDbContext _db;
+        private readonly PlanningPokerDbContext _database;
+        private readonly IMapper _mapper;
 
-        public EstimationStore(PlanningPokerDbContext db)
+        public EstimationStore(
+            PlanningPokerDbContext database,
+            IMapper mapper)
         {
-            _db = db;
+            _database = database;
+            _mapper = mapper;
         }
 
         public async Task<IReadOnlyList<Estimation>> GetAllAsync(
             Guid roomId,
             CancellationToken cancellationToken = default)
         {
-            return await _db.Estimations
+            var daos = await _database.Estimations
                 .AsNoTracking()
                 .Where(x => x.RoomId == roomId)
                 .OrderBy(x => x.CreatedAt)
                 .ThenBy(x => x.Id)
                 .ToArrayAsync(cancellationToken);
+
+            return _mapper.Map<IReadOnlyList<Estimation>>(daos);
         }
 
-        public Task<Estimation?> GetAsync(
+        public async Task<Estimation?> GetAsync(
             Guid roomId,
             Guid estimationId,
             CancellationToken cancellationToken = default)
         {
-            return _db.Estimations.FirstOrDefaultAsync(
-                x => x.Id == estimationId &&
-                     x.RoomId == roomId,
-                cancellationToken);
+            var dao = await _database.Estimations
+                .FirstOrDefaultAsync(
+                    x => x.Id == estimationId &&
+                         x.RoomId == roomId,
+                    cancellationToken);
+
+            return _mapper.Map<Estimation?>(dao);
         }
 
         public async Task<IReadOnlyList<Vote>> GetVotesAsync(
             Guid estimationId,
             CancellationToken cancellationToken = default)
         {
-            return await _db.Votes
+            var daos = await _database.Votes
                 .AsNoTracking()
                 .Where(x => x.EstimationId == estimationId)
                 .ToArrayAsync(cancellationToken);
+
+            return _mapper.Map<IReadOnlyList<Vote>>(daos);
         }
 
         public async Task CreateAndSetCurrentAsync(
@@ -52,61 +65,80 @@ namespace PlanningPoker.Infrastructure.Stores
             Estimation estimation,
             CancellationToken cancellationToken = default)
         {
-            if (_db.Entry(room).State == EntityState.Detached)
+            if (estimation.RoomId != room.Id)
             {
-                _db.Rooms.Update(room);
+                throw new ArgumentException("Estimation belongs to another room.");
             }
 
-            await _db.Estimations.AddAsync(
-                estimation,
-                cancellationToken);
+            var roomDao = await _database.Rooms.FindAsync(
+                new object[] { room.Id },
+                cancellationToken)
+                ?? throw new KeyNotFoundException("Room not found.");
 
-            await _db.SaveChangesAsync(cancellationToken);
+            _database.Entry(roomDao).CurrentValues.SetValues(room);
+
+            var estimationDao = _mapper.Map<EstimationDao>(estimation);
+
+            await _database.Estimations.AddAsync(estimationDao, cancellationToken);
+            await _database.SaveChangesAsync(cancellationToken);
         }
 
         public async Task SetCurrentAsync(
             Room room,
             CancellationToken cancellationToken = default)
         {
-            if (_db.Entry(room).State == EntityState.Detached)
-            {
-                _db.Rooms.Update(room);
-            }
+            var dao = await _database.Rooms.FindAsync(
+                new object[] { room.Id },
+                cancellationToken)
+                ?? throw new KeyNotFoundException("Room not found.");
 
-            await _db.SaveChangesAsync(cancellationToken);
+            _database.Entry(dao).CurrentValues.SetValues(room);
+
+            await _database.SaveChangesAsync(cancellationToken);
         }
 
         public async Task UpdateAsync(
             Estimation estimation,
             CancellationToken cancellationToken = default)
         {
-            if (_db.Entry(estimation).State == EntityState.Detached)
+            var dao = await _database.Estimations.FindAsync(
+                new object[] { estimation.Id },
+                cancellationToken)
+                ?? throw new KeyNotFoundException("Estimation not found.");
+
+            if (dao.RoomId != estimation.RoomId)
             {
-                _db.Estimations.Update(estimation);
+                throw new KeyNotFoundException("Estimation not found.");
             }
 
-            await _db.SaveChangesAsync(cancellationToken);
+            _database.Entry(dao).CurrentValues.SetValues(estimation);
+
+            await _database.SaveChangesAsync(cancellationToken);
         }
 
         public async Task ClearVotesAsync(
             Estimation estimation,
             CancellationToken cancellationToken = default)
         {
-            await using var transaction =
-                await _db.Database.BeginTransactionAsync(
-                    cancellationToken);
+            var dao = await _database.Estimations.FindAsync(
+                new object[] { estimation.Id },
+                cancellationToken)
+                ?? throw new KeyNotFoundException("Estimation not found.");
 
-            await _db.Votes
+            if (dao.RoomId != estimation.RoomId)
+            {
+                throw new KeyNotFoundException("Estimation not found.");
+            }
+
+            await using var transaction = await _database.Database.BeginTransactionAsync(cancellationToken);
+
+            await _database.Votes
                 .Where(x => x.EstimationId == estimation.Id)
                 .ExecuteDeleteAsync(cancellationToken);
 
-            if (_db.Entry(estimation).State == EntityState.Detached)
-            {
-                _db.Estimations.Update(estimation);
-            }
+            _database.Entry(dao).CurrentValues.SetValues(estimation);
 
-            await _db.SaveChangesAsync(cancellationToken);
-
+            await _database.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
     }

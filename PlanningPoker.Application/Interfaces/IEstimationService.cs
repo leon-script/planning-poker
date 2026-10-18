@@ -1,5 +1,5 @@
-﻿using PlanningPoker.Core.Contracts;
-using PlanningPoker.Core.Entities;
+﻿using PlanningPoker.Core.Entities;
+using PlanningPoker.Core.States;
 
 namespace PlanningPoker.Application.Interfaces
 {

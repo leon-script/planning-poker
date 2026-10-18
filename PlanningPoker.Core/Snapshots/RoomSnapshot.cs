@@ -1,6 +1,6 @@
 ﻿using PlanningPoker.Core.Entities;
 
-namespace PlanningPoker.Core.Contracts
+namespace PlanningPoker.Core.Snapshots
 {
     public sealed record RoomSnapshot(
         Room Room,

@@ -1,28 +1,28 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using PlanningPoker.Core.Entities;
+using PlanningPoker.Infrastructure.Persistence.Daos;
 
 namespace PlanningPoker.Infrastructure.Persistence
 {
     public sealed class PlanningPokerDbContext : DbContext
     {
-        public PlanningPokerDbContext(
-            DbContextOptions<PlanningPokerDbContext> options)
-            : base(options)
+        public PlanningPokerDbContext(DbContextOptions<PlanningPokerDbContext> options) : base(options)
         {
         }
 
-        public DbSet<Room> Rooms => Set<Room>();
-        public DbSet<Participant> Participants => Set<Participant>();
-        public DbSet<Estimation> Estimations => Set<Estimation>();
-        public DbSet<Vote> Votes => Set<Vote>();
+        public DbSet<RoomDao> Rooms => Set<RoomDao>();
+        public DbSet<ParticipantDao> Participants => Set<ParticipantDao>();
+        public DbSet<EstimationDao> Estimations => Set<EstimationDao>();
+        public DbSet<VoteDao> Votes => Set<VoteDao>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
             // Room
-            modelBuilder.Entity<Room>(entity =>
+            modelBuilder.Entity<RoomDao>(entity =>
             {
+                entity.ToTable("Rooms");
+
                 entity.HasKey(x => x.Id);
 
                 entity.Property(x => x.AccessCodeHash)
@@ -32,20 +32,22 @@ namespace PlanningPoker.Infrastructure.Persistence
                 entity.HasIndex(x => x.AccessCodeHash)
                     .IsUnique();
 
-                entity.HasMany<Participant>()
+                entity.HasMany<ParticipantDao>()
                     .WithOne()
                     .HasForeignKey(x => x.RoomId)
                     .OnDelete(DeleteBehavior.Cascade);
 
-                entity.HasMany<Estimation>()
+                entity.HasMany<EstimationDao>()
                     .WithOne()
                     .HasForeignKey(x => x.RoomId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
 
             // Participant
-            modelBuilder.Entity<Participant>(entity =>
+            modelBuilder.Entity<ParticipantDao>(entity =>
             {
+                entity.ToTable("Participants");
+
                 entity.HasKey(x => x.Id);
 
                 entity.Property(x => x.Name)
@@ -75,8 +77,10 @@ namespace PlanningPoker.Infrastructure.Persistence
             });
 
             // Estimation
-            modelBuilder.Entity<Estimation>(entity =>
+            modelBuilder.Entity<EstimationDao>(entity =>
             {
+                entity.ToTable("Estimations");
+
                 entity.HasKey(x => x.Id);
 
                 entity.Property(x => x.Title)
@@ -96,20 +100,22 @@ namespace PlanningPoker.Infrastructure.Persistence
             });
 
             // Vote
-            modelBuilder.Entity<Vote>(entity =>
+            modelBuilder.Entity<VoteDao>(entity =>
             {
+                entity.ToTable("Votes");
+
                 entity.HasKey(x => x.Id);
 
                 entity.Property(x => x.Value)
                     .HasColumnType("real")
                     .IsRequired();
 
-                entity.HasOne<Estimation>()
+                entity.HasOne<EstimationDao>()
                     .WithMany()
                     .HasForeignKey(x => x.EstimationId)
                     .OnDelete(DeleteBehavior.Cascade);
 
-                entity.HasOne<Participant>()
+                entity.HasOne<ParticipantDao>()
                     .WithMany()
                     .HasForeignKey(x => x.ParticipantId)
                     .OnDelete(DeleteBehavior.NoAction);

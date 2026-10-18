@@ -1,100 +1,124 @@
-﻿using Microsoft.EntityFrameworkCore;
-using PlanningPoker.Core.Contracts;
+﻿using AutoMapper;
+using Microsoft.EntityFrameworkCore;
 using PlanningPoker.Core.Entities;
-using PlanningPoker.Core.Interfaces;
+using PlanningPoker.Core.Snapshots;
+using PlanningPoker.Infrastructure.Interfaces;
 using PlanningPoker.Infrastructure.Persistence;
+using PlanningPoker.Infrastructure.Persistence.Daos;
 
 namespace PlanningPoker.Infrastructure.Stores
 {
     public sealed class RoomStore : IRoomStore
     {
-        private readonly PlanningPokerDbContext _db;
+        private readonly PlanningPokerDbContext _database;
+        private readonly IMapper _mapper;
 
-        public RoomStore(PlanningPokerDbContext db)
+        public RoomStore(
+            PlanningPokerDbContext database,
+            IMapper mapper)
         {
-            _db = db;
+            _database = database;
+            _mapper = mapper;
         }
 
         public async Task CreateAsync(
             Room room,
             CancellationToken cancellationToken = default)
         {
-            await _db.Rooms.AddAsync(room, cancellationToken);
-            await _db.SaveChangesAsync(cancellationToken);
+            var dao = _mapper.Map<RoomDao>(room);
+
+            await _database.Rooms.AddAsync(dao, cancellationToken);
+            await _database.SaveChangesAsync(cancellationToken);
         }
 
-        public Task<Room?> GetAsync(
+        public async Task<Room?> GetAsync(
             Guid roomId,
             CancellationToken cancellationToken = default)
         {
-            return _db.Rooms.FirstOrDefaultAsync(
-                x => x.Id == roomId,
+            var dao = await _database.Rooms.FindAsync(
+                new object[] { roomId },
                 cancellationToken);
+
+            return _mapper.Map<Room?>(dao);
         }
 
-        public Task<Room?> GetByAccessCodeHashAsync(
+        public async Task<Room?> GetByAccessCodeHashAsync(
             string codeHash,
             CancellationToken cancellationToken = default)
         {
-            return _db.Rooms.FirstOrDefaultAsync(
-                x => x.AccessCodeHash == codeHash,
-                cancellationToken);
+            var dao = await _database.Rooms
+                .FirstOrDefaultAsync(
+                    x => x.AccessCodeHash == codeHash,
+                    cancellationToken);
+
+            return _mapper.Map<Room?>(dao);
         }
 
         public async Task<RoomSnapshot?> GetSnapshotAsync(
             Guid roomId,
             CancellationToken cancellationToken = default)
         {
-            var room = await _db.Rooms
+            var roomDao = await _database.Rooms
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
                     x => x.Id == roomId,
                     cancellationToken);
 
-            if (room is null)
+            if (roomDao is null)
+            {
                 return null;
+            }
 
-            var participants = await _db.Participants
+            var participantDaos = await _database.Participants
                 .AsNoTracking()
                 .Where(x => x.RoomId == roomId)
                 .OrderBy(x => x.JoinedAt)
                 .ToArrayAsync(cancellationToken);
 
-            Estimation? estimation = null;
-            IReadOnlyList<Vote> votes = Array.Empty<Vote>();
+            EstimationDao? estimationDao = null;
+            IReadOnlyList<VoteDao> voteDaos = [];
 
-            if (room.CurrentEstimationId is Guid estimationId)
+            if (roomDao.CurrentEstimationId is Guid estimationId)
             {
-                estimation = await _db.Estimations
+                estimationDao = await _database.Estimations
                     .AsNoTracking()
                     .FirstOrDefaultAsync(
                         x => x.RoomId == roomId &&
                              x.Id == estimationId,
                         cancellationToken);
 
-                if (estimation is not null)
+                if (estimationDao is not null)
                 {
-                    votes = await _db.Votes
+                    voteDaos = await _database.Votes
                         .AsNoTracking()
-                        .Where(x => x.EstimationId == estimation.Id)
+                        .Where(x => x.EstimationId == estimationDao.Id)
                         .ToArrayAsync(cancellationToken);
                 }
             }
 
-            return new RoomSnapshot(
-                room,
-                participants,
-                estimation,
-                votes);
+            var room = _mapper.Map<Room>(roomDao);
+            var participants = _mapper.Map<IReadOnlyList<Participant>>(participantDaos);
+            var estimation = estimationDao is null ? null : _mapper.Map<Estimation>(estimationDao);
+            var votes = _mapper.Map<IReadOnlyList<Vote>>(voteDaos);
+
+            return new RoomSnapshot(room, participants, estimation, votes);
         }
 
         public async Task DeleteAsync(
             Guid roomId,
             CancellationToken cancellationToken = default)
         {
-            await _db.Rooms
-                .Where(x => x.Id == roomId)
-                .ExecuteDeleteAsync(cancellationToken);
+            var dao = await _database.Rooms.FindAsync(
+                new object[] { roomId },
+                cancellationToken);
+
+            if (dao is null)
+            {
+                return;
+            }
+
+            _database.Rooms.Remove(dao);
+            await _database.SaveChangesAsync(cancellationToken);
         }
     }
 }

@@ -8,6 +8,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PlanningPoker.Core\PlanningPoker.Core.csproj" />
+    <ProjectReference Include="..\PlanningPoker.Infrastructure\PlanningPoker.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Mappers\" />
   </ItemGroup>
 
 </Project>
